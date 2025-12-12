@@ -21,6 +21,7 @@ export interface DiscoveredPackage {
 export interface PublishOptions {
   dryRun: boolean;
   registry: string;
+  otp: string;
   skipBuild: boolean;
   skipPrompts: boolean;
 }

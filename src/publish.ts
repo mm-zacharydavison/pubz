@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { DiscoveredPackage } from './types.js';
+import type { DiscoveredPackage, PackageJson } from './types.js';
 
 export interface BuildResult {
   success: boolean;
@@ -69,26 +69,52 @@ export async function runBuild(
 export async function verifyBuild(
   pkg: DiscoveredPackage,
 ): Promise<BuildResult> {
-  const distPath = join(pkg.path, 'dist');
+  const content = await readFile(pkg.packageJsonPath, 'utf-8');
+  const packageJson = JSON.parse(content) as PackageJson & {
+    main?: string;
+    bin?: string | Record<string, string>;
+    exports?: Record<string, unknown> | string;
+  };
 
-  try {
-    await stat(distPath);
-  } catch {
-    return { success: false, error: `Build output not found at ${distPath}` };
+  // Collect files to verify from package.json
+  const filesToCheck: string[] = [];
+
+  // Check main entry
+  if (packageJson.main) {
+    filesToCheck.push(packageJson.main);
   }
 
-  // Check for index.js
-  try {
-    await stat(join(distPath, 'index.js'));
-  } catch {
-    return { success: false, error: `Missing dist/index.js in ${pkg.name}` };
+  // Check bin entries
+  if (packageJson.bin) {
+    if (typeof packageJson.bin === 'string') {
+      filesToCheck.push(packageJson.bin);
+    } else {
+      filesToCheck.push(...Object.values(packageJson.bin));
+    }
   }
 
-  // Check for index.d.ts (optional, just warn)
-  try {
-    await stat(join(distPath, 'index.d.ts'));
-  } catch {
-    console.log(`  Warning: ${pkg.name} missing dist/index.d.ts`);
+  // Check exports (simple case)
+  if (packageJson.exports) {
+    if (typeof packageJson.exports === 'string') {
+      filesToCheck.push(packageJson.exports);
+    } else if (typeof packageJson.exports['.'] === 'string') {
+      filesToCheck.push(packageJson.exports['.'] as string);
+    }
+  }
+
+  // Default to dist/index.js if nothing specified
+  if (filesToCheck.length === 0) {
+    filesToCheck.push('./dist/index.js');
+  }
+
+  // Verify each file exists
+  for (const file of filesToCheck) {
+    const filePath = join(pkg.path, file);
+    try {
+      await stat(filePath);
+    } catch {
+      return { success: false, error: `Missing ${file} in ${pkg.name}` };
+    }
   }
 
   return { success: true };
@@ -97,6 +123,7 @@ export async function verifyBuild(
 export async function publishPackage(
   pkg: DiscoveredPackage,
   registry: string,
+  otp: string,
   dryRun: boolean,
 ): Promise<PublishResult> {
   if (dryRun) {
@@ -109,6 +136,9 @@ export async function publishPackage(
   console.log(`Publishing ${pkg.name}@${pkg.version}...`);
 
   const args = ['publish', '--registry', registry, '--access', 'public'];
+  if (otp) {
+    args.push('--otp', otp);
+  }
   const result = await run('bun', args, pkg.path);
 
   if (result.code !== 0) {

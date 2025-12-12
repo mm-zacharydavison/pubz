@@ -24,21 +24,22 @@ const REGISTRIES = {
 
 function printUsage() {
   console.log(`
-pubb - Interactive CLI for publishing monorepo packages
+pubz - Interactive npm package publisher
 
-Usage: pubb [options]
+Usage: pubz [options]
 
 Options:
   --dry-run              Show what would be published without actually publishing
   --registry <url>       Specify npm registry URL (default: public npm)
+  --otp <code>           One-time password for 2FA
   --skip-build           Skip the build step
   --yes, -y              Skip confirmation prompts (use defaults)
   -h, --help             Show this help message
 
 Examples:
-  pubb                                           # Interactive publish
-  pubb --dry-run                                 # Preview what would happen
-  pubb --registry https://npm.pkg.github.com     # Publish to GitHub Packages
+  pubz                                           # Interactive publish
+  pubz --dry-run                                 # Preview what would happen
+  pubz --registry https://npm.pkg.github.com    # Publish to GitHub Packages
 `);
 }
 
@@ -46,6 +47,7 @@ function parseArgs(args: string[]): PublishOptions & { help: boolean } {
   const options: PublishOptions & { help: boolean } = {
     dryRun: false,
     registry: '',
+    otp: '',
     skipBuild: false,
     skipPrompts: false,
     help: false,
@@ -60,6 +62,9 @@ function parseArgs(args: string[]): PublishOptions & { help: boolean } {
         break;
       case '--registry':
         options.registry = args[++i] || '';
+        break;
+      case '--otp':
+        options.otp = args[++i] || '';
         break;
       case '--skip-build':
         options.skipBuild = true;
@@ -93,8 +98,8 @@ async function main() {
     console.log('');
   }
 
-  console.log('pubb - Monorepo Package Publisher');
-  console.log('==================================');
+  console.log('pubz - npm package publisher');
+  console.log('=============================');
   console.log('');
 
   // Discover packages
@@ -286,7 +291,7 @@ async function main() {
     console.log('');
 
     for (const pkg of packages) {
-      const result = await publishPackage(pkg, registry, options.dryRun);
+      const result = await publishPackage(pkg, registry, options.otp, options.dryRun);
       if (!result.success) {
         console.error(`Failed to publish ${pkg.name}: ${result.error}`);
         console.log('');
