@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { discoverPackages, sortByDependencyOrder } from './discovery.js';
-import { closePrompt, confirm, prompt, select } from './prompts.js';
+import { closePrompt, confirm, multiSelect, prompt, select } from './prompts.js';
 import {
   createGitTag,
   publishPackage,
@@ -134,6 +134,26 @@ async function main() {
     console.log(`  - ${pkg.name}@${pkg.version}${deps}`);
   }
   console.log('');
+
+  // Package selection (skip if only one package or --yes flag)
+  if (packages.length > 1 && !options.skipPrompts) {
+    const selectedPackages = await multiSelect(
+      'Select packages to publish:',
+      packages.map((pkg) => ({
+        label: `${pkg.name}@${pkg.version}`,
+        value: pkg,
+      })),
+    );
+
+    if (selectedPackages.length === 0) {
+      console.log('No packages selected. Exiting.');
+      closePrompt();
+      process.exit(0);
+    }
+
+    packages = sortByDependencyOrder(selectedPackages);
+    console.log('');
+  }
 
   // Get current version (use first package as source of truth)
   const currentVersion = packages[0].version;
