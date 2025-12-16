@@ -107,7 +107,7 @@ async function main() {
   // Check for uncommitted changes
   const uncommitted = await hasUncommittedChanges(cwd);
   if (uncommitted.hasChanges && !options.dryRun) {
-    console.log('Warning: You have uncommitted changes:');
+    console.log('Error: You have uncommitted changes:');
     console.log('');
     for (const file of uncommitted.files.slice(0, 10)) {
       console.log(`  ${file}`);
@@ -116,18 +116,9 @@ async function main() {
       console.log(`  ... and ${uncommitted.files.length - 10} more`);
     }
     console.log('');
-    console.log('These changes will be included in the version bump commit.');
-    console.log('');
-
-    if (!options.skipPrompts) {
-      const shouldContinue = await confirm('Continue anyway?');
-      if (!shouldContinue) {
-        console.log('Aborted. Please commit or stash your changes first.');
-        closePrompt();
-        process.exit(0);
-      }
-      console.log('');
-    }
+    console.log('Please commit or stash your changes before publishing.');
+    closePrompt();
+    process.exit(1);
   }
 
   // Discover packages

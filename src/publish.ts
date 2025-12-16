@@ -22,7 +22,6 @@ function run(
     const proc = spawn(command, args, {
       cwd,
       stdio: ['inherit', 'pipe', 'pipe'],
-      shell: true,
     });
 
     let output = '';
