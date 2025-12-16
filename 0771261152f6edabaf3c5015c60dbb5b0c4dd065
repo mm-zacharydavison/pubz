@@ -1,0 +1,23 @@
+src/cli.ts
+  b99b93c4ecedb037 110,119,121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.24",
+  "base_commit_sha": "0771261152f6edabaf3c5015c60dbb5b0c4dd065",
+  "prompts": {
+    "b99b93c4ecedb037": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7479e56-2246-423d-bcf2-6561c67aa862",
+        "model": "unknown"
+      },
+      "human_author": "Zachary Davison <zachary.davison@meetsmore.com>",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 14,
+      "accepted_lines": 3,
+      "overriden_lines": 0
+    }
+  }
+}
