@@ -3,7 +3,9 @@
 import { discoverPackages, sortByDependencyOrder } from './discovery.js';
 import { closePrompt, confirm, multiSelect, prompt, select } from './prompts.js';
 import {
+  commitVersionBump,
   createGitTag,
+  hasUncommittedChanges,
   publishPackage,
   pushGitTag,
   runBuild,
@@ -101,6 +103,32 @@ async function main() {
   console.log('pubz - npm package publisher');
   console.log('=============================');
   console.log('');
+
+  // Check for uncommitted changes
+  const uncommitted = await hasUncommittedChanges(cwd);
+  if (uncommitted.hasChanges && !options.dryRun) {
+    console.log('Warning: You have uncommitted changes:');
+    console.log('');
+    for (const file of uncommitted.files.slice(0, 10)) {
+      console.log(`  ${file}`);
+    }
+    if (uncommitted.files.length > 10) {
+      console.log(`  ... and ${uncommitted.files.length - 10} more`);
+    }
+    console.log('');
+    console.log('These changes will be included in the version bump commit.');
+    console.log('');
+
+    if (!options.skipPrompts) {
+      const shouldContinue = await confirm('Continue anyway?');
+      if (!shouldContinue) {
+        console.log('Aborted. Please commit or stash your changes first.');
+        closePrompt();
+        process.exit(0);
+      }
+      console.log('');
+    }
+  }
 
   // Discover packages
   console.log('Discovering packages...');
@@ -205,6 +233,14 @@ async function main() {
       // Update in-memory versions
       for (const pkg of packages) {
         pkg.version = newVersion;
+      }
+
+      // Commit version bump
+      const commitResult = await commitVersionBump(newVersion, cwd, options.dryRun);
+      if (!commitResult.success) {
+        console.error(`Failed to commit version bump: ${commitResult.error}`);
+        closePrompt();
+        process.exit(1);
       }
 
       console.log('');

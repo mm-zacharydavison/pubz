@@ -149,6 +149,55 @@ export async function publishPackage(
   return { success: true };
 }
 
+export async function hasUncommittedChanges(
+  cwd: string,
+): Promise<{ hasChanges: boolean; files: string[] }> {
+  const result = await run('git', ['status', '--porcelain'], cwd);
+  const output = result.output.trim();
+  if (!output) {
+    return { hasChanges: false, files: [] };
+  }
+  const files = output.split('\n').map((line) => line.slice(3));
+  return { hasChanges: true, files };
+}
+
+export async function commitVersionBump(
+  version: string,
+  cwd: string,
+  dryRun: boolean,
+): Promise<{ success: boolean; error?: string }> {
+  const tagName = `v${version}`;
+
+  if (dryRun) {
+    console.log(`[DRY RUN] Would commit version bump for ${tagName}`);
+    return { success: true };
+  }
+
+  // Check for uncommitted changes
+  const statusResult = await run('git', ['status', '--porcelain'], cwd);
+  if (!statusResult.output.trim()) {
+    return { success: true };
+  }
+
+  console.log('Committing version bump...');
+  const addResult = await run('git', ['add', '-A'], cwd);
+  if (addResult.code !== 0) {
+    return { success: false, error: 'Failed to stage changes' };
+  }
+
+  const commitResult = await run(
+    'git',
+    ['commit', '-m', `chore: release ${tagName}`],
+    cwd,
+  );
+  if (commitResult.code !== 0) {
+    return { success: false, error: 'Failed to commit changes' };
+  }
+
+  console.log('  Changes committed');
+  return { success: true };
+}
+
 export async function createGitTag(
   version: string,
   cwd: string,
@@ -161,16 +210,6 @@ export async function createGitTag(
     return { success: true };
   }
 
-  // Check for uncommitted changes
-  const statusResult = await run('git', ['status', '--porcelain'], cwd);
-  if (statusResult.output.trim()) {
-    console.log('Uncommitted changes detected. Committing...');
-    await run('git', ['add', '-A'], cwd);
-    await run('git', ['commit', '-m', `chore: release ${tagName}`], cwd);
-    console.log('  Changes committed');
-  }
-
-  // Create tag
   const tagResult = await run('git', ['tag', tagName], cwd);
   if (tagResult.code !== 0) {
     return {
