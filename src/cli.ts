@@ -1,5 +1,14 @@
 #!/usr/bin/env node
 
+import {
+  bold,
+  cyan,
+  dim,
+  green,
+  muted,
+  red,
+  yellow,
+} from './colors.js';
 import { discoverPackages, sortByDependencyOrder } from './discovery.js';
 import { closePrompt, confirm, multiSelect, prompt, select } from './prompts.js';
 import {
@@ -96,33 +105,33 @@ async function main() {
   const cwd = process.cwd();
 
   if (options.dryRun) {
-    console.log('DRY RUN MODE - No actual changes will be made');
+    console.log(yellow(bold('DRY RUN MODE')) + dim(' - No actual changes will be made'));
     console.log('');
   }
 
-  console.log('pubz - npm package publisher');
-  console.log('=============================');
+  console.log(bold('pubz') + dim(' - npm package publisher'));
+  console.log(dim('═'.repeat(30)));
   console.log('');
 
   // Check for uncommitted changes
   const uncommitted = await hasUncommittedChanges(cwd);
   if (uncommitted.hasChanges && !options.dryRun) {
-    console.log('Error: You have uncommitted changes:');
+    console.log(red(bold('Error:')) + ' You have uncommitted changes:');
     console.log('');
     for (const file of uncommitted.files.slice(0, 10)) {
-      console.log(`  ${file}`);
+      console.log(`  ${yellow(file)}`);
     }
     if (uncommitted.files.length > 10) {
-      console.log(`  ... and ${uncommitted.files.length - 10} more`);
+      console.log(dim(`  ... and ${uncommitted.files.length - 10} more`));
     }
     console.log('');
-    console.log('Please commit or stash your changes before publishing.');
+    console.log(muted('Please commit or stash your changes before publishing.'));
     closePrompt();
     process.exit(1);
   }
 
   // Discover packages
-  console.log('Discovering packages...');
+  console.log(cyan('Discovering packages...'));
   console.log('');
 
   let packages = await discoverPackages(cwd);
@@ -131,11 +140,11 @@ async function main() {
   const publishablePackages = packages.filter((p) => !p.isPrivate);
 
   if (publishablePackages.length === 0) {
-    console.log('No publishable packages found.');
+    console.log(yellow('No publishable packages found.'));
     console.log('');
-    console.log('Make sure your packages:');
-    console.log('  - Have a package.json with a "name" field');
-    console.log('  - Do not have "private": true');
+    console.log(muted('Make sure your packages:'));
+    console.log(muted('  - Have a package.json with a "name" field'));
+    console.log(muted('  - Do not have "private": true'));
     console.log('');
     process.exit(1);
   }
@@ -143,14 +152,14 @@ async function main() {
   // Sort by dependency order
   packages = sortByDependencyOrder(publishablePackages);
 
-  console.log(`Found ${packages.length} publishable package(s):`);
+  console.log(`Found ${green(bold(String(packages.length)))} publishable package(s):`);
   console.log('');
   for (const pkg of packages) {
     const deps =
       pkg.localDependencies.length > 0
-        ? ` (depends on: ${pkg.localDependencies.join(', ')})`
+        ? dim(` (depends on: ${pkg.localDependencies.join(', ')})`)
         : '';
-    console.log(`  - ${pkg.name}@${pkg.version}${deps}`);
+    console.log(`  ${dim('•')} ${cyan(pkg.name)}${dim('@')}${yellow(pkg.version)}${deps}`);
   }
   console.log('');
 
@@ -165,7 +174,7 @@ async function main() {
     );
 
     if (selectedPackages.length === 0) {
-      console.log('No packages selected. Exiting.');
+      console.log(yellow('No packages selected. Exiting.'));
       closePrompt();
       process.exit(0);
     }
@@ -178,10 +187,10 @@ async function main() {
   const currentVersion = packages[0].version;
 
   // Step 1: Version Management
-  console.log('Step 1: Version Management');
-  console.log('--------------------------');
+  console.log(bold(cyan('Step 1:')) + ' Version Management');
+  console.log(dim('─'.repeat(30)));
   console.log('');
-  console.log(`Current version: ${currentVersion}`);
+  console.log(`Current version: ${yellow(currentVersion)}`);
   console.log('');
 
   let newVersion = currentVersion;
@@ -211,7 +220,7 @@ async function main() {
       newVersion = bumpVersion(currentVersion, bumpType);
 
       console.log('');
-      console.log(`Updating version to ${newVersion} in all packages...`);
+      console.log(`Updating version to ${green(newVersion)} in all packages...`);
       console.log('');
 
       for (const pkg of packages) {
@@ -229,7 +238,7 @@ async function main() {
       // Commit version bump
       const commitResult = await commitVersionBump(newVersion, cwd, options.dryRun);
       if (!commitResult.success) {
-        console.error(`Failed to commit version bump: ${commitResult.error}`);
+        console.error(red(bold('Failed to commit version bump:')) + ` ${commitResult.error}`);
         closePrompt();
         process.exit(1);
       }
@@ -257,33 +266,33 @@ async function main() {
   registry = registry || REGISTRIES.npm;
 
   console.log('');
-  console.log(`Publishing to: ${registry}`);
+  console.log(`Publishing to: ${cyan(registry)}`);
   console.log('');
 
   // Step 3: Build
   if (!options.skipBuild) {
-    console.log('Step 2: Building Packages');
-    console.log('-------------------------');
+    console.log(bold(cyan('Step 2:')) + ' Building Packages');
+    console.log(dim('─'.repeat(30)));
     console.log('');
 
     const buildResult = await runBuild(cwd, options.dryRun);
     if (!buildResult.success) {
-      console.error(`Build failed: ${buildResult.error}`);
+      console.error(red(bold('Build failed:')) + ` ${buildResult.error}`);
       closePrompt();
       process.exit(1);
     }
 
     console.log('');
-    console.log('Verifying builds...');
+    console.log(cyan('Verifying builds...'));
     console.log('');
 
     let allBuildsVerified = true;
     for (const pkg of packages) {
       const result = await verifyBuild(pkg);
       if (result.success) {
-        console.log(`  ${pkg.name} build verified`);
+        console.log(`  ${green('✓')} ${pkg.name} build verified`);
       } else {
-        console.error(`  ${pkg.name}: ${result.error}`);
+        console.error(`  ${red('✗')} ${pkg.name}: ${result.error}`);
         allBuildsVerified = false;
       }
     }
@@ -292,7 +301,7 @@ async function main() {
 
     if (!allBuildsVerified) {
       console.error(
-        'Build verification failed. Please fix the issues and try again.',
+        red('Build verification failed.') + muted(' Please fix the issues and try again.'),
       );
       closePrompt();
       process.exit(1);
@@ -300,49 +309,49 @@ async function main() {
   }
 
   // Step 4: Publish
-  console.log('Step 3: Publishing to npm');
-  console.log('-------------------------');
+  console.log(bold(cyan('Step 3:')) + ' Publishing to npm');
+  console.log(dim('─'.repeat(30)));
   console.log('');
 
   if (options.dryRun) {
     console.log(
-      `[DRY RUN] Would publish the following packages to ${registry}:`,
+      yellow('[DRY RUN]') + ` Would publish the following packages to ${cyan(registry)}:`,
     );
     console.log('');
     for (const pkg of packages) {
-      console.log(`  ${pkg.name}@${newVersion}`);
+      console.log(`  ${dim('•')} ${cyan(pkg.name)}${dim('@')}${yellow(newVersion)}`);
     }
     console.log('');
-    console.log('Run without --dry-run to actually publish.');
+    console.log(muted('Run without --dry-run to actually publish.'));
   } else {
     console.log('About to publish the following packages:');
     console.log('');
     for (const pkg of packages) {
-      console.log(`  ${pkg.name}@${newVersion}`);
+      console.log(`  ${dim('•')} ${cyan(pkg.name)}${dim('@')}${yellow(newVersion)}`);
     }
     console.log('');
-    console.log(`Registry: ${registry}`);
+    console.log(`Registry: ${cyan(registry)}`);
     console.log('');
 
     if (!options.skipPrompts) {
       const shouldContinue = await confirm('Continue?');
       if (!shouldContinue) {
-        console.log('Publish cancelled.');
+        console.log(yellow('Publish cancelled.'));
         closePrompt();
         process.exit(0);
       }
     }
 
     console.log('');
-    console.log('Publishing packages...');
+    console.log(cyan('Publishing packages...'));
     console.log('');
 
     for (const pkg of packages) {
       const result = await publishPackage(pkg, registry, options.otp, options.dryRun);
       if (!result.success) {
-        console.error(`Failed to publish ${pkg.name}: ${result.error}`);
+        console.error(red(bold('Failed to publish')) + ` ${cyan(pkg.name)}: ${result.error}`);
         console.log('');
-        console.log('Stopping publish process.');
+        console.log(red('Stopping publish process.'));
         closePrompt();
         process.exit(1);
       }
@@ -350,15 +359,15 @@ async function main() {
   }
 
   console.log('');
-  console.log('==================================');
-  console.log('Publishing complete!');
+  console.log(dim('═'.repeat(30)));
+  console.log(green(bold('Publishing complete!')));
   console.log('');
-  console.log(`Published version: ${newVersion}`);
+  console.log(`Published version: ${green(bold(newVersion))}`);
   console.log('');
 
   // Step 5: Git tagging
   if (!options.dryRun && !options.skipPrompts) {
-    const shouldTag = await confirm(`Create a git tag for v${newVersion}?`);
+    const shouldTag = await confirm(`Create a git tag for ${cyan(`v${newVersion}`)}?`);
 
     if (shouldTag) {
       console.log('');
@@ -370,22 +379,22 @@ async function main() {
           await pushGitTag(newVersion, cwd, options.dryRun);
         } else {
           console.log(
-            `Tag created locally. Push manually with: git push origin v${newVersion}`,
+            `Tag created locally. Push manually with: ${dim(`git push origin v${newVersion}`)}`,
           );
         }
       } else {
-        console.error(tagResult.error);
+        console.error(red(tagResult.error ?? 'Failed to create git tag'));
       }
       console.log('');
     }
   }
 
-  console.log('Done!');
+  console.log(green(bold('Done!')));
   closePrompt();
 }
 
 main().catch((error) => {
-  console.error('Error:', error.message);
+  console.error(red(bold('Error:')) + ` ${error.message}`);
   closePrompt();
   process.exit(1);
 });

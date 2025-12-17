@@ -1,4 +1,5 @@
 import * as readline from 'node:readline';
+import { bold, cyan, dim, green, muted, yellow } from './colors.js';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -19,13 +20,13 @@ export function closePrompt(): void {
 
 export async function confirm(
   message: string,
-  defaultNo = true,
+  defaultYes = true,
 ): Promise<boolean> {
-  const hint = defaultNo ? '[y/N]' : '[Y/n]';
-  const answer = await prompt(`${message} ${hint} `);
+  const hint = defaultYes ? `[${bold('Y')}/n]` : `[y/${bold('N')}]`;
+  const answer = await prompt(`${cyan('?')} ${message} ${hint} `);
 
   if (answer === '') {
-    return !defaultNo;
+    return defaultYes;
   }
 
   return answer.toLowerCase() === 'y';
@@ -36,17 +37,18 @@ export async function select<T extends string>(
   options: { label: string; value: T }[],
   defaultIndex = 0,
 ): Promise<T> {
-  console.log(message);
+  console.log(`${cyan('?')} ${message}`);
   console.log('');
 
   for (let i = 0; i < options.length; i++) {
-    const marker = i === defaultIndex ? '>' : ' ';
-    console.log(`  ${marker} ${i + 1}) ${options[i].label}`);
+    const marker = i === defaultIndex ? cyan('>') : ' ';
+    const num = dim(`${i + 1})`);
+    console.log(`  ${marker} ${num} ${options[i].label}`);
   }
 
   console.log('');
   const answer = await prompt(
-    `Enter choice [1-${options.length}] (default: ${defaultIndex + 1}): `,
+    `  Enter choice ${dim(`[1-${options.length}]`)} ${muted(`(default: ${defaultIndex + 1})`)}: `,
   );
 
   if (answer === '') {
@@ -58,7 +60,7 @@ export async function select<T extends string>(
     return options[index].value;
   }
 
-  console.log(`Invalid choice. Using default: ${options[defaultIndex].label}`);
+  console.log(yellow(`  Invalid choice. Using default: ${options[defaultIndex].label}`));
   return options[defaultIndex].value;
 }
 
@@ -70,56 +72,109 @@ export async function multiSelect<T>(
   const selected = new Set<number>(
     allSelectedByDefault ? options.map((_, i) => i) : [],
   );
+  let cursor = 0;
 
-  const printOptions = () => {
-    console.log(message);
-    console.log('');
-    for (let i = 0; i < options.length; i++) {
-      const checkbox = selected.has(i) ? '[x]' : '[ ]';
-      console.log(`  ${checkbox} ${i + 1}) ${options[i].label}`);
+  const clearLines = (count: number) => {
+    for (let i = 0; i < count; i++) {
+      process.stdout.write('\x1b[A\x1b[2K');
     }
-    console.log('');
-    console.log('Enter number to toggle, "a" to select all, "n" to select none, or press Enter to confirm:');
   };
 
-  printOptions();
-
-  while (true) {
-    const answer = await prompt('> ');
-
-    if (answer === '') {
-      break;
+  const render = (initial = false) => {
+    if (!initial) {
+      clearLines(options.length + 3);
     }
 
-    if (answer.toLowerCase() === 'a') {
-      for (let i = 0; i < options.length; i++) {
-        selected.add(i);
+    console.log(`${cyan('?')} ${message}`);
+    console.log('');
+
+    for (let i = 0; i < options.length; i++) {
+      const isSelected = selected.has(i);
+      const isCursor = i === cursor;
+      const checkbox = isSelected ? green('[x]') : dim('[ ]');
+      const pointer = isCursor ? cyan('>') : ' ';
+      const label = isCursor ? bold(options[i].label) : options[i].label;
+      console.log(`  ${pointer} ${checkbox} ${label}`);
+    }
+
+    console.log('');
+    console.log(dim('  ↑/↓ navigate • space toggle • a all • n none • enter confirm'));
+  };
+
+  return new Promise((resolve) => {
+    render(true);
+
+    // Pause readline so we can use raw mode
+    rl.pause();
+
+    const stdin = process.stdin;
+    stdin.setRawMode(true);
+    stdin.resume();
+
+    const onKeypress = (key: Buffer) => {
+      const str = key.toString();
+
+      // Ctrl+C
+      if (str === '\x03') {
+        stdin.setRawMode(false);
+        stdin.removeListener('data', onKeypress);
+        rl.resume();
+        console.log('');
+        process.exit(0);
       }
-      console.log('');
-      printOptions();
-      continue;
-    }
 
-    if (answer.toLowerCase() === 'n') {
-      selected.clear();
-      console.log('');
-      printOptions();
-      continue;
-    }
-
-    const index = Number.parseInt(answer, 10) - 1;
-    if (index >= 0 && index < options.length) {
-      if (selected.has(index)) {
-        selected.delete(index);
-      } else {
-        selected.add(index);
+      // Enter
+      if (str === '\r' || str === '\n') {
+        stdin.setRawMode(false);
+        stdin.removeListener('data', onKeypress);
+        rl.resume();
+        console.log('');
+        resolve(options.filter((_, i) => selected.has(i)).map((o) => o.value));
+        return;
       }
-      console.log('');
-      printOptions();
-    } else {
-      console.log('Invalid input. Try again.');
-    }
-  }
 
-  return options.filter((_, i) => selected.has(i)).map((o) => o.value);
+      // Space - toggle selection
+      if (str === ' ') {
+        if (selected.has(cursor)) {
+          selected.delete(cursor);
+        } else {
+          selected.add(cursor);
+        }
+        render();
+        return;
+      }
+
+      // Up arrow
+      if (str === '\x1b[A' || str === 'k') {
+        cursor = cursor > 0 ? cursor - 1 : options.length - 1;
+        render();
+        return;
+      }
+
+      // Down arrow
+      if (str === '\x1b[B' || str === 'j') {
+        cursor = cursor < options.length - 1 ? cursor + 1 : 0;
+        render();
+        return;
+      }
+
+      // 'a' - select all
+      if (str === 'a') {
+        for (let i = 0; i < options.length; i++) {
+          selected.add(i);
+        }
+        render();
+        return;
+      }
+
+      // 'n' - select none
+      if (str === 'n') {
+        selected.clear();
+        render();
+        return;
+      }
+    };
+
+    stdin.on('data', onKeypress);
+  });
 }
