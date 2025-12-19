@@ -23,7 +23,9 @@ export interface PublishOptions {
   registry: string;
   otp: string;
   skipBuild: boolean;
-  skipPrompts: boolean;
+  skipConfirms: boolean;
+  ci: boolean;
+  version: string;
 }
 
 export type VersionBumpType = 'major' | 'minor' | 'patch' | 'none';

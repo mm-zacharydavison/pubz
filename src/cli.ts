@@ -44,13 +44,17 @@ Options:
   --registry <url>       Specify npm registry URL (default: public npm)
   --otp <code>           One-time password for 2FA
   --skip-build           Skip the build step
-  --yes, -y              Skip confirmation prompts (use defaults)
+  --yes, -y              Skip yes/no confirmation prompts (still asks for choices)
+  --ci                   CI mode: skip all prompts, auto-accept everything
+  --version <value>      Version bump type (patch|minor|major) or explicit version (required with --ci)
   -h, --help             Show this help message
 
 Examples:
   pubz                                           # Interactive publish
   pubz --dry-run                                 # Preview what would happen
   pubz --registry https://npm.pkg.github.com    # Publish to GitHub Packages
+  pubz --ci --version patch                      # CI mode with patch bump
+  pubz --ci --version 1.2.3                      # CI mode with explicit version
 `);
 }
 
@@ -60,7 +64,9 @@ function parseArgs(args: string[]): PublishOptions & { help: boolean } {
     registry: '',
     otp: '',
     skipBuild: false,
-    skipPrompts: false,
+    skipConfirms: false,
+    ci: false,
+    version: '',
     help: false,
   };
 
@@ -82,7 +88,13 @@ function parseArgs(args: string[]): PublishOptions & { help: boolean } {
         break;
       case '--yes':
       case '-y':
-        options.skipPrompts = true;
+        options.skipConfirms = true;
+        break;
+      case '--ci':
+        options.ci = true;
+        break;
+      case '--version':
+        options.version = args[++i] || '';
         break;
       case '-h':
       case '--help':
@@ -101,6 +113,23 @@ async function main() {
     printUsage();
     process.exit(0);
   }
+
+  // CI mode validation
+  if (options.ci && !options.version) {
+    console.error(red(bold('Error:')) + ' --ci requires --version to be specified');
+    console.log('');
+    console.log(muted('Examples:'));
+    console.log(muted('  pubz --ci --version patch'));
+    console.log(muted('  pubz --ci --version minor'));
+    console.log(muted('  pubz --ci --version major'));
+    console.log(muted('  pubz --ci --version 1.2.3'));
+    process.exit(1);
+  }
+
+  // Helper to check if we should skip confirmations
+  const skipConfirms = options.skipConfirms || options.ci;
+  // Helper to check if we should skip all prompts (including selections)
+  const skipAllPrompts = options.ci;
 
   const cwd = process.cwd();
 
@@ -163,8 +192,8 @@ async function main() {
   }
   console.log('');
 
-  // Package selection (skip if only one package or --yes flag)
-  if (packages.length > 1 && !options.skipPrompts) {
+  // Package selection (skip if only one package or --ci flag)
+  if (packages.length > 1 && !skipAllPrompts) {
     const selectedPackages = await multiSelect(
       'Select packages to publish:',
       packages.map((pkg) => ({
@@ -195,7 +224,45 @@ async function main() {
 
   let newVersion = currentVersion;
 
-  if (!options.skipPrompts) {
+  // Handle version from --version flag (bump type or explicit version)
+  if (options.version) {
+    const bumpTypes = ['patch', 'minor', 'major'] as const;
+    const isBumpType = bumpTypes.includes(options.version as (typeof bumpTypes)[number]);
+
+    if (isBumpType) {
+      newVersion = bumpVersion(currentVersion, options.version as VersionBumpType);
+      console.log(`Bumping version (${options.version}): ${yellow(currentVersion)} → ${green(newVersion)}`);
+    } else {
+      newVersion = options.version;
+      console.log(`Using explicit version: ${green(newVersion)}`);
+    }
+    console.log('');
+
+    console.log(`Updating version to ${green(newVersion)} in all packages...`);
+    console.log('');
+
+    for (const pkg of packages) {
+      await updatePackageVersion(pkg, newVersion, options.dryRun);
+    }
+
+    // Update local dependency versions
+    await updateLocalDependencyVersions(packages, newVersion, options.dryRun);
+
+    // Update in-memory versions
+    for (const pkg of packages) {
+      pkg.version = newVersion;
+    }
+
+    // Commit version bump
+    const commitResult = await commitVersionBump(newVersion, cwd, options.dryRun);
+    if (!commitResult.success) {
+      console.error(red(bold('Failed to commit version bump:')) + ` ${commitResult.error}`);
+      closePrompt();
+      process.exit(1);
+    }
+
+    console.log('');
+  } else if (!skipConfirms) {
     const shouldBump = await confirm('Bump version before publishing?');
 
     if (shouldBump) {
@@ -250,7 +317,7 @@ async function main() {
   // Step 2: Registry Selection
   let registry = options.registry;
 
-  if (!registry && !options.skipPrompts) {
+  if (!registry && !skipAllPrompts) {
     registry = await select('Select publish target:', [
       {
         label: 'Public npm registry (https://registry.npmjs.org)',
@@ -333,7 +400,7 @@ async function main() {
     console.log(`Registry: ${cyan(registry)}`);
     console.log('');
 
-    if (!options.skipPrompts) {
+    if (!skipConfirms) {
       const shouldContinue = await confirm('Continue?');
       if (!shouldContinue) {
         console.log(yellow('Publish cancelled.'));
@@ -366,26 +433,41 @@ async function main() {
   console.log('');
 
   // Step 5: Git tagging
-  if (!options.dryRun && !options.skipPrompts) {
-    const shouldTag = await confirm(`Create a git tag for ${cyan(`v${newVersion}`)}?`);
-
-    if (shouldTag) {
+  if (!options.dryRun) {
+    if (options.ci) {
+      // In CI mode, automatically create and push git tag
       console.log('');
+      console.log(cyan('Creating git tag...'));
       const tagResult = await createGitTag(newVersion, cwd, options.dryRun);
 
       if (tagResult.success) {
-        const shouldPush = await confirm('Push tag to origin?');
-        if (shouldPush) {
-          await pushGitTag(newVersion, cwd, options.dryRun);
-        } else {
-          console.log(
-            `Tag created locally. Push manually with: ${dim(`git push origin v${newVersion}`)}`,
-          );
-        }
+        console.log(cyan('Pushing tag to origin...'));
+        await pushGitTag(newVersion, cwd, options.dryRun);
       } else {
         console.error(red(tagResult.error ?? 'Failed to create git tag'));
       }
       console.log('');
+    } else if (!skipConfirms) {
+      const shouldTag = await confirm(`Create a git tag for ${cyan(`v${newVersion}`)}?`);
+
+      if (shouldTag) {
+        console.log('');
+        const tagResult = await createGitTag(newVersion, cwd, options.dryRun);
+
+        if (tagResult.success) {
+          const shouldPush = await confirm('Push tag to origin?');
+          if (shouldPush) {
+            await pushGitTag(newVersion, cwd, options.dryRun);
+          } else {
+            console.log(
+              `Tag created locally. Push manually with: ${dim(`git push origin v${newVersion}`)}`,
+            );
+          }
+        } else {
+          console.error(red(tagResult.error ?? 'Failed to create git tag'));
+        }
+        console.log('');
+      }
     }
   }
 
