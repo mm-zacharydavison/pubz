@@ -74,6 +74,8 @@ bunx pubz --ci --version 1.2.3
 
 Here's an example workflow for publishing with `pubz`, using an input selector for patch/minor/major version bump.
 
+### Using NPM_TOKEN (classic)
+
 ```yaml
 name: Publish
 
@@ -106,6 +108,57 @@ jobs:
 
       - name: Configure npm
         run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+
+      - name: Publish
+        run: bunx pubz --ci --version ${{ inputs.version }}
+
+      - name: Push changes
+        run: git push && git push --tags
+```
+
+### Using OIDC Trusted Publishing (recommended)
+
+Trusted publishing uses OpenID Connect to authenticate with npm without storing long-lived tokens. First, configure your package on npmjs.com:
+
+1. Go to your package → Settings → Trusted Publishers
+2. Add your GitHub repository and workflow file name
+
+```yaml
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version bump type or explicit version'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: bun install
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Publish
         run: bunx pubz --ci --version ${{ inputs.version }}
@@ -193,22 +246,23 @@ Registry: https://registry.npmjs.org
 Publishing packages...
 
 Publishing pubz@0.2.3...
-bun publish v1.3.2 (b131639c)
-
-packed 0.70KB package.json
-packed 2.28KB README.md
-packed 28.65KB dist/cli.js
-
-Total files: 3
-Shasum: b8cd25d62b05d5cd6a4ecc8ff6ef6e522e7b2aa5
-Integrity: sha512-jihTMvUxMeXNX[...]2+gtHJexETkWA==
-Unpacked size: 31.64KB
-Packed size: 8.31KB
-Tag: latest
-Access: public
-Registry: https://registry.npmjs.org
-
- + pubz@0.2.3
+npm notice
+npm notice 📦  pubz@0.2.3
+npm notice Tarball Contents
+npm notice 717B  package.json
+npm notice 2.3kB README.md
+npm notice 28.7kB dist/cli.js
+npm notice Tarball Details
+npm notice name:          pubz
+npm notice version:       0.2.3
+npm notice filename:      pubz-0.2.3.tgz
+npm notice package size:  8.3 kB
+npm notice unpacked size: 31.6 kB
+npm notice shasum:        b8cd25d62b05d5cd6a4ecc8ff6ef6e522e7b2aa5
+npm notice integrity:     sha512-jihTMvUxMeXNX[...]2+gtHJexETkWA==
+npm notice total files:   3
+npm notice
++ pubz@0.2.3
   pubz published successfully
 
 ══════════════════════════════

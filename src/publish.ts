@@ -138,7 +138,7 @@ export async function publishPackage(
   if (otp) {
     args.push('--otp', otp);
   }
-  const result = await run('bun', args, pkg.path);
+  const result = await run('npm', args, pkg.path);
 
   if (result.code !== 0) {
     return { success: false, error: `Failed to publish ${pkg.name}` };
