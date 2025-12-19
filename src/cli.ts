@@ -262,8 +262,10 @@ async function main() {
     }
 
     console.log('');
-  } else if (!skipConfirms) {
-    const shouldBump = await confirm('Bump version before publishing?');
+  } else if (!skipAllPrompts) {
+    // With --yes: skip the confirmation but still ask for bump type
+    // Without --yes: ask both confirmation and bump type
+    const shouldBump = skipConfirms || (await confirm('Bump version before publishing?'));
 
     if (shouldBump) {
       const bumpType = await select<VersionBumpType>(
