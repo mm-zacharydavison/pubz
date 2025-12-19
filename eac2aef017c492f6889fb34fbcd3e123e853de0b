@@ -1,0 +1,25 @@
+README.md
+  ebd9857e70b39e36 77-78,119-161,249-264
+src/publish.ts
+  ebd9857e70b39e36 141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.24",
+  "base_commit_sha": "eac2aef017c492f6889fb34fbcd3e123e853de0b",
+  "prompts": {
+    "ebd9857e70b39e36": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "82fd6c33-c6e3-4d96-afe9-2bb68691d0f1",
+        "model": "unknown"
+      },
+      "human_author": "Zachary Davison <zachary.davison@meetsmore.com>",
+      "messages": [],
+      "total_additions": 71,
+      "total_deletions": 17,
+      "accepted_lines": 70,
+      "overriden_lines": 0
+    }
+  }
+}
