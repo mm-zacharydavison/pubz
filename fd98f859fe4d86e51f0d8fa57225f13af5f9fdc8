@@ -1,0 +1,25 @@
+src/types.ts
+  7eb39220b88e0736 26-28
+src/cli.ts
+  7eb39220b88e0736 47-49,56-57,67-69,91-97,117-133,195-196,227-265,320,403,437-438,440,444,450-459,464-470
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.24",
+  "base_commit_sha": "fd98f859fe4d86e51f0d8fa57225f13af5f9fdc8",
+  "prompts": {
+    "7eb39220b88e0736": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1b2ddf7-0172-40ea-a8ee-0a884d0c53ad",
+        "model": "unknown"
+      },
+      "human_author": "Zachary Davison <zachary.davison@meetsmore.com>",
+      "messages": [],
+      "total_additions": 110,
+      "total_deletions": 26,
+      "accepted_lines": 99,
+      "overriden_lines": 0
+    }
+  }
+}
